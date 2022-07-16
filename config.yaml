@@ -1,0 +1,6 @@
+db:
+  URI: "sqlite:///./testDB.db"
+
+Encrytion:
+  SECRET_KEY: "SeCrEtKeY"
+  ALGORITHM: "HS256"
