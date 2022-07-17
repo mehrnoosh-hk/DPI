@@ -1,8 +1,11 @@
 import sqlite3
+from sqlalchemy import INTEGER, VARCHAR, Column, String, Integer, Table, MetaData
+from sqlalchemy.schema import CreateTable
+from sqlalchemy.orm import Session
 
 
-def create_db_name(id: int, name: str) -> str:
-    return "USER_" + str(id) + name.replace(" ", "")
+def create_table_name(u_id: str, name: str) -> str:
+    return "USER_" + str(u_id) + name.replace(" ", "")
 
 def create_course_Info(rows: list, columnInfos: list):
     columnNames = [(item[1]).replace("_", " ") for item in columnInfos]
@@ -52,7 +55,6 @@ def create_course_Info(rows: list, columnInfos: list):
             if mid['fieldType'] == 'INTEGER':
                 mid['fieldType'] = 'number'
             if 'fileType' in mid['fieldName']:
-                print("Fuck")
                 mid['fieldType'] = 'file'
                 mid['fieldName'] = (mid['fieldName']).replace('fileType ', '')
             field_dict.append(mid)
@@ -77,3 +79,41 @@ def reindex(table_name, r: int) -> None:
     with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
         cur = conn.cursor()
         cur.executescript(sql)
+
+
+def create_table_dynamically(tableName: str, info: list[dict], db: Session):
+    # Create a uniqe table name
+
+    TABLE_NAME = tableName.replace(" ", "")
+    TABLE_SPEC = []
+    type_dict = {'string': String, 'number': Integer, 'file': String}
+    for d in info:
+
+        n = (d['fieldName']).replace(" ", "_")
+        t = d['fieldType']
+        if t == 'file':
+            n = 'fileType_' + n
+        TABLE_SPEC.append((n, type_dict[t]))
+    columns = [Column(n, t) for n, t in TABLE_SPEC]
+    columns.append(Column('id', Integer, primary_key=True))
+    columns.append(Column('recordID', Integer))
+    table = Table(TABLE_NAME, MetaData(), *columns)
+
+    table_creation_sql = CreateTable(table)
+    db.execute(table_creation_sql)
+
+def clean_up_course_fields(courseField: list) -> list:
+    cleanCourseField = []
+    for d in courseField:
+        if d["fieldName"] == 'id' or d["fieldName"] == "recordID":
+            continue
+        d["fieldName"] = d["fieldName"].replace("_", " ")
+        if d['fieldType'] == "VARCHAR":
+            d['fieldType'] = 'text'
+        elif d["fieldType"] == "INTEGER":
+            d["fieldType"] = 'number'
+        elif 'fileType' in d['fieldName']:
+                d['fieldType'] = 'file'
+                d['fieldName'] = (d['fieldName']).replace('fileType ', '')
+        cleanCourseField.append(d)
+    return cleanCourseField

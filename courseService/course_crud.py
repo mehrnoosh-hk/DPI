@@ -3,50 +3,48 @@ import sqlite3
 from aifc import Error
 from typing import Optional
 
-from data.database import engine
-from data.models.models import UserCourse, Utility
-from data.schemas.course_schema import CourseSchema, CourseSchemaUpdate
-from helper.link import create_link
+from dataAdapter.database import engine
+from .courseDbModel import UserCourse, Utility
+from courseService.course_schema import CourseSchema, CourseSchemaUpdate
+from courseService.link import create_link
 from pydantic import Json
-from sqlalchemy import (JSON, BigInteger, Column, DateTime, Float, Integer,
-                        MetaData, String, Table, create_engine, insert,
-                        inspect, null, table)
+from sqlalchemy import (MetaData, Table, select, create_engine, table)
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
 
-from helper.db_scripts import create_course_Info, create_update_info, reindex
+from courseService.db_scripts import clean_up_course_fields, create_course_Info, create_table_dynamically, create_table_name, create_update_info, reindex
 
-def db_create_user_course(
-    user_id,
-    course_name,
-    course_filds,
-    db: Session
-    ) -> Optional[Error]:
-    """This function creates a new course for a user
+# def db_create_user_course(
+#     user_id,
+#     course_name,
+#     course_filds,
+#     db: Session
+#     ) -> Optional[Error]:
+#     """This function creates a new course for a user
 
-    Args:
-        user_id (_type_): The id of the user
-        course_name (_type_): The name of the course which specified by the user
-        course_filds (_type_): The fields of the course which specified by the user
-        db (Session): The database session
+#     Args:
+#         user_id (_type_): The id of the user
+#         course_name (_type_): The name of the course which specified by the user
+#         course_filds (_type_): The fields of the course which specified by the user
+#         db (Session): The database session
 
-    Returns:
-        None | Error: If the course is created successfully, return None, otherwise return Error
-    """
-    try:
-        user_course = UserCourse(
-        user_id=user_id,
-        course_name=course_name,
-        course_filds=course_filds,
-        course_info=[],
-        course_link= create_link()
-        )
-        db.add(user_course)
-        db.commit()
-        db.refresh(user_course)
-        return
-    except Exception as e:
-        return e
+#     Returns:
+#         None | Error: If the course is created successfully, return None, otherwise return Error
+#     """
+#     try:
+#         user_course = UserCourse(
+#         user_id=user_id,
+#         course_name=course_name,
+#         course_filds=course_filds,
+#         course_info=[],
+#         course_link= create_link()
+#         )
+#         db.add(user_course)
+#         db.commit()
+#         db.refresh(user_course)
+#         return
+#     except Exception as e:
+#         return e
 
 
 def db_get_user_courses(user_id, db: Session) -> list[UserCourse]:
@@ -108,32 +106,11 @@ def db_get_course_link(course_link:str, db:Session):
     return course
 
 
-def db_create_course(id:str, course_input: CourseSchema, db:Session):
+def db_create_course(id:str, course_input: CourseSchema, db:Session) -> None:
     """Dynamically create a table for course defined by user"""
+    TABLE_NAME = create_table_name(id, course_input.courseName)
+    create_table_dynamically(TABLE_NAME, course_input.courseDetails, db)
 
-    # Create a uniqe table name
-    TABLE_NAME = "user_" + str(id) + "_" + (course_input.courseName)
-    TABLE_NAME = TABLE_NAME.replace(" ", "")
-    TABLE_SPEC = []
-    type_dict = {'string': String, 'number': Integer, 'file': String}
-    for c in course_input.courseDetails:
-
-        n = (c['fieldName']).replace(" ", "_")
-        t = c['fieldType']
-        if t == 'file':
-            n = 'fileType_' + n
-        print(n)
-        print(t)
-        TABLE_SPEC.append((n, type_dict[t]))
-
-
-    columns = [Column(n, t) for n, t in TABLE_SPEC]
-    columns.append(Column('id', Integer, primary_key=True))
-    columns.append(Column('recordID', Integer))
-    table = Table(TABLE_NAME, MetaData(), *columns)
-
-    table_creation_sql = CreateTable(table)
-    db.execute(table_creation_sql)
 
     # Register the created table in user_courses table
     user_course = UserCourse(
@@ -146,24 +123,36 @@ def db_create_course(id:str, course_input: CourseSchema, db:Session):
     db.add(user_course)
     db.commit()
     db.refresh(user_course)
-    return user_course.id
+    return id
+
 
 
 def db_get_course_details(id: int, db:Session):
     course = db.query(UserCourse).filter(UserCourse.id == id).first()
     table_name = course.table_name
 
-    stmt1 = f"SELECT * FROM {table_name}"
-    stmt2 = f"PRAGMA table_info({table_name})"
-    with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
-        cur = conn.cursor()
-        cur.execute(stmt1)  
-        rows = cur.fetchall()
-        cur.execute(stmt2)
-        columnInfos = cur.fetchall()
-    result_dict, field_dict = create_course_Info(rows, columnInfos)
+    # Read table meta data of columns name and type and create courseFiled list
+    table_meta = Table(table_name, MetaData(), autoload_with=engine)
+    courseField = [{"fieldName": c.name, "fieldType": str(c.type)} for c in table_meta.columns]
+    cleanCourseField = clean_up_course_fields(courseField)
 
-    return result_dict, field_dict
+    # Read table rows and create courseInfo
+    stmt = select(table_meta)
+    rows = db.execute(stmt).all()
+    courseInfo = []
+    cleanCourseInfo = []
+    if len(rows) > 0:
+        for row in rows:
+            for i in range(len(table_meta.columns)):
+                temp = {
+                    "fieldName": table_meta.columns[i].name,
+                    "fieldType": str(table_meta.columns[i].type),
+                    "fieldValue": row[i]
+                }
+                courseInfo.append(temp)
+        cleanCourseInfo = clean_up_course_fields(courseInfo)
+
+    return cleanCourseInfo, cleanCourseField
 
 def db_course_insert(course, course_input: CourseSchemaUpdate, db: Session):
     
@@ -190,8 +179,7 @@ def db_course_insert(course, course_input: CourseSchemaUpdate, db: Session):
 
         # Convert request body to database processable entities
         col_name_literal, col_value_literal =  create_update_info((course_input.courseInfo))
-        print(col_name_literal)
-        print(col_value_literal)
+
         # Update course table
         sql = """
         INSERT INTO {table}({cols}) VALUES ({vals})

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
-from helper.encrypt import (
+from userService.encrypt import (
     encrypt_password, 
     check_password, 
     create_token, 
@@ -8,9 +8,9 @@ from helper.encrypt import (
     oauth2_scheme
 )
 
-from data.schemas.user_schema import UserSchema
-from data.crud import user_crud
-from data.database import get_db
+from userService.user_schema import UserSchema
+from userService import user_crud
+from dataAdapter.database import get_db
 
 # Create a router for handling user authentication and information
 def auth_router() -> APIRouter:

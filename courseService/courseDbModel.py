@@ -1,20 +1,7 @@
+from dataAdapter.database import Base
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
-from sqlalchemy.orm import declarative_base, relationship
-from data.database import Base
-
-
-
-
-class User(Base):
-    __tablename__ = 'users'
-    id = Column(Integer, primary_key=True)
-    email = Column(String(255), nullable=False)
-    password = Column(String(255), nullable=False)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-
-    user_courses = relationship('UserCourse', back_populates='user')
-
+from sqlalchemy.orm import relationship
 
 class UserCourse(Base):
     __tablename__ = 'user_courses'
@@ -28,9 +15,10 @@ class UserCourse(Base):
 
     user = relationship('User', back_populates='user_courses')
 
+    
+
 class Utility(Base):
     __tablename__ = 'utility'
     id = Column(Integer, primary_key=True)
     course_id = Column(Integer)
     max_record = Column(Integer)
-

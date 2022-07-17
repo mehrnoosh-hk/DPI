@@ -1,13 +1,15 @@
 from fastapi import APIRouter, Depends, Response, UploadFile, status, HTTPException, File
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect
-from data.crud.course_crud import db_get_course_link
-from data.crud import course_crud
-from data.schemas.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord
-from data.database import get_db
+from sqlalchemy import inspect, MetaData, Table
+from courseService.course_crud import db_get_course_link
+from courseService import course_crud
+from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord
+from dataAdapter.database import get_db
 
-from helper.encrypt import get_user_id_from_token, oauth2_scheme
-from helper.db_scripts import create_db_name
+from userService.encrypt import get_user_id_from_token, oauth2_scheme
+from courseService.db_scripts import create_table_name
+
+from dataAdapter.database import engine
 
 # Create a router for handling course information
 def course_router() -> APIRouter:
@@ -80,16 +82,19 @@ def course_router() -> APIRouter:
             }
         }
 
-    # Edits a course by id
+    # Add data to course 
     @course_router.put("/courses/{course_id}")
-    def edit_course(
+    def add_row_to_course(
         course_id: int,
         course_input: CourseSchemaUpdate,
         db: Session = Depends(get_db),
         token: str = Depends(oauth2_scheme),
     ):
-        # Checks if the course exists
+
+        # Read user id from token
         user_id = get_user_id_from_token(token)
+
+        # Check if the course exists
         course = course_crud.db_get_course_by_id(course_id, db)
         if not course:
             raise HTTPException(
@@ -102,7 +107,7 @@ def course_router() -> APIRouter:
                 }
             )
         
-        # Checks if user is the owner of the course
+        # Check if user is the owner of the course
         if course.user_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -113,15 +118,30 @@ def course_router() -> APIRouter:
                     "errorText": "شما اجازه تغییر این دوره را ندارید"
                 }
             )
+
         
+
+
         # Add data to course
         else:
-            course_crud.db_course_insert(course, course_input, db)
-            return {
-            "statusCode": status.HTTP_200_OK,
-            "title": "Success",
-            "statusText": "دوره با موفقیت به روز رسانی شد",
-            }
+            try:
+                course_crud.db_course_insert(course, course_input, db)
+                return {
+                "statusCode": status.HTTP_200_OK,
+                "title": "Success",
+                "statusText": "دوره با موفقیت به روز رسانی شد",
+                }
+            except Exception as e:
+                print(e)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail= {
+                        "statusCode": status.HTTP_400_BAD_REQUEST,
+                        "title": "Bad Request",
+                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"
+                    }
+                )
+            
 
     # Create a new course for a user
     @course_router.post("/courses")
@@ -132,8 +152,8 @@ def course_router() -> APIRouter:
                     db: Session = Depends(get_db),
         ):
         
-        id = get_user_id_from_token(token)
-        table_name = create_db_name(id, course_input.courseName)
+        u_id = get_user_id_from_token(token)
+        table_name = create_table_name(u_id, course_input.courseName)
 
         # Cheks if this course already exists
         course = course_crud.db_get_course_by_name(table_name, db)
@@ -151,7 +171,7 @@ def course_router() -> APIRouter:
         try:
             # Create new course
             course_id = course_crud.db_create_course(
-                id,
+                u_id,
                 course_input,
                 db
             )

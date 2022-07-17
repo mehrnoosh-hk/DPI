@@ -1,17 +1,10 @@
-from data.models.models import User, UserCourse
-from data.database import Base, engine
-
-from sqlalchemy import create_engine
+from .userDbModel import User
+from dataAdapter.database import Base, engine
 from sqlalchemy.orm import Session
-
 from typing import Optional
 
 
-# TODO: Move this to start up file
-Base.metadata.create_all(engine)
-
-
-# Retrieve a user from database by id
+# Read a user from database by id
 def db_get_user_by_id(user_id: int, db: Session) -> Optional[User]:
     """This function retrieves a user from the database by id.
 
@@ -26,7 +19,7 @@ def db_get_user_by_id(user_id: int, db: Session) -> Optional[User]:
     return user
 
 
-# Retrieve a user from database by email
+# Read a user from database by email
 def db_get_user_by_email(user_email: str, db: Session) -> Optional[User]:
     """This function retrieves a user from the database by email.
 
@@ -56,7 +49,7 @@ def db_get_users(db: Session) -> list[User]:
 
 
 # Create a new user in database
-def db_create_user(email: str, password: str, db: Session) -> int:
+def db_create_user(email: str, password: str, db: Session) -> None:
     """This function creates a new user in the database.
 
     Args:
@@ -71,4 +64,3 @@ def db_create_user(email: str, password: str, db: Session) -> int:
     db.add(user)
     db.commit()
     db.refresh(user)
-    return int(user.id)

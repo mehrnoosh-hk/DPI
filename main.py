@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes.user_routes.user_routes import auth_router
-from routes.course_routes.course_routes import course_router
+from userService.user_routes import auth_router
+from courseService.course_routes import course_router
+from dataAdapter.database import Base, engine
 
 app = FastAPI()
 
@@ -19,3 +20,5 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+Base.metadata.create_all(engine)
