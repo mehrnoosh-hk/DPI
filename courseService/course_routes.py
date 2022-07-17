@@ -15,6 +15,57 @@ from dataAdapter.database import engine
 def course_router() -> APIRouter:
     course_router = APIRouter()
 
+    # Create a new course for a user
+    @course_router.post("/courses")
+    def create_course(
+                    course_input: CourseSchema,
+                    response: Response,
+                    token: str = Depends(oauth2_scheme),
+                    db: Session = Depends(get_db),
+        ):
+        
+        u_id = get_user_id_from_token(token)
+        table_name = create_table_name(u_id, course_input.courseName)
+
+        # Cheks if this course already exists
+        course = course_crud.db_get_course_by_name(table_name, db)
+        if course:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "statusCode": status.HTTP_409_CONFLICT,
+                    "title": "Conflict",
+                    "errorText": "دوره دیگری با این نام وجود دارد",
+                }
+            )
+            
+        # Create table
+        try:
+            # Create new course
+            course_id = course_crud.db_create_course(
+                u_id,
+                course_input,
+                db
+            )
+            # Add course to utility table
+            course_crud.db_add_course_to_utility(course_id, db)
+            response.status_code = status.HTTP_201_CREATED
+            return {
+                "statusCode": status.HTTP_201_CREATED,
+                "title": "Created",
+                "statusText": "دوره جدید ایجاد شد",
+            }
+        except Exception as e:
+            print(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail={
+                    "statusCode": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "title": "Internal Server Error",
+                    "errorText": "خطای سیستمی رخ داده",
+                }
+            )
+
     # Returns all courses for a user
     @course_router.get("/user_courses")
     def get_courses_of_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)):
@@ -143,57 +194,7 @@ def course_router() -> APIRouter:
                 )
             
 
-    # Create a new course for a user
-    @course_router.post("/courses")
-    def create_course(
-                    course_input: CourseSchema,
-                    response: Response,
-                    token: str = Depends(oauth2_scheme),
-                    db: Session = Depends(get_db),
-        ):
-        
-        u_id = get_user_id_from_token(token)
-        table_name = create_table_name(u_id, course_input.courseName)
-
-        # Cheks if this course already exists
-        course = course_crud.db_get_course_by_name(table_name, db)
-        if course:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={
-                    "statusCode": status.HTTP_409_CONFLICT,
-                    "title": "Conflict",
-                    "errorText": "دوره دیگری با این نام وجود دارد",
-                }
-            )
-            
-        # Create table
-        try:
-            # Create new course
-            course_id = course_crud.db_create_course(
-                u_id,
-                course_input,
-                db
-            )
-            # Add course to utility table
-            course_crud.db_add_course_to_utility(course_id, db)
-            response.status_code = status.HTTP_201_CREATED
-            return {
-                "statusCode": status.HTTP_201_CREATED,
-                "title": "Created",
-                "statusText": "دوره جدید ایجاد شد",
-            }
-        except Exception as e:
-            print(e)
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "statusCode": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    "title": "Internal Server Error",
-                    "errorText": "خطای سیستمی رخ داده",
-                }
-            )
-
+    
     
     @course_router.get("/{course_link}")
     def get_course_by_link(course_link:str,db:Session=Depends(get_db)):
