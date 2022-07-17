@@ -14,38 +14,6 @@ from sqlalchemy.schema import CreateTable, DropTable
 
 from courseService.db_scripts import clean_up_course_fields, create_course_Info, create_table_dynamically, create_table_name, create_update_info, reindex
 
-# def db_create_user_course(
-#     user_id,
-#     course_name,
-#     course_filds,
-#     db: Session
-#     ) -> Optional[Error]:
-#     """This function creates a new course for a user
-
-#     Args:
-#         user_id (_type_): The id of the user
-#         course_name (_type_): The name of the course which specified by the user
-#         course_filds (_type_): The fields of the course which specified by the user
-#         db (Session): The database session
-
-#     Returns:
-#         None | Error: If the course is created successfully, return None, otherwise return Error
-#     """
-#     try:
-#         user_course = UserCourse(
-#         user_id=user_id,
-#         course_name=course_name,
-#         course_filds=course_filds,
-#         course_info=[],
-#         course_link= create_link()
-#         )
-#         db.add(user_course)
-#         db.commit()
-#         db.refresh(user_course)
-#         return
-#     except Exception as e:
-#         return e
-
 
 def db_get_user_courses(user_id, db: Session) -> list[UserCourse]:
     """This function return the list of all courses of a user based on user id
@@ -123,7 +91,7 @@ def db_create_course(id:str, course_input: CourseSchema, db:Session) -> None:
     db.add(user_course)
     db.commit()
     db.refresh(user_course)
-    return id
+    return user_course.id
 
 
 
