@@ -128,19 +128,19 @@ def db_course_insert(course: UserCourse, course_input: CourseSchemaUpdate, db: S
         # Convert request body to database processable entities
         for d in course_input.courseInfo:
             d['fieldName'] = d['fieldName'].replace(" ", "_")
-        record_id = course_input.recordID['recordID']
-        
+        record_id = course_input.recordID['recordID']        
 
         table_name = course.table_name
         table_meta = Table(table_name, MetaData(), autoload_with=engine)
+        value = {}
         for d in course_input.courseInfo:
-            value = {d["fieldName"]: d["fieldValue"]}
-            print(value)
-            stmt = (update(table_meta).
-            where("recordID" == record_id).
-            values(value))
-            print(stmt)
-            db.execute(stmt)
+            value.update({d["fieldName"]: d["fieldValue"]})
+        value = [value]
+        with engine.connect() as conn:
+            result = conn.execute(
+                update(table_meta).where(table_meta.c.recordID == 5),
+                value
+            )
 
 
 
