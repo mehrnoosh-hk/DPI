@@ -60,14 +60,14 @@ def create_course_Info(rows: list, columnInfos: list):
             field_dict.append(mid)
     return result_dict, field_dict
 
-def create_update_info(courseInfo: list[dict]):
-    update_info = []
-    for d in courseInfo:
-        d['fieldName'] = d['fieldName'].replace(" ", "_")
+# def create_update_info(courseInfo: list[dict]):
+#     update_info = []
+#     for d in courseInfo:
+#         d['fieldName'] = d['fieldName'].replace(" ", "_")
 
-    col_name_literal = ",".join(col_name)
-    col_value_literal = ",".join(f"'{w}'" for w in col_value)
-    return col_name_literal, col_value_literal
+#     col_name_literal = ",".join(col_name)
+#     col_value_literal = ",".join(f"'{w}'" for w in col_value)
+#     return col_name_literal, col_value_literal
 
 def create_put_row_info(courseInfo: list):
     col_name = []

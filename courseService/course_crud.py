@@ -153,32 +153,14 @@ def db_course_insert(course: UserCourse, course_input: CourseSchemaUpdate, db: S
         table_meta = Table(table_name, MetaData(), autoload=True, autoload_with=engine)
         value = {}
         for d in course_input.courseInfo:
-            value.update({d["fieldName"] : d["fieldValue"]})
-        print(value)
-        stmt = insert(table_meta).values(value)
-        print(stmt)
-        db.execute(stmt)
-        # Update utility table
-        # course_util = db.query(Utility).filter(Utility.course_id == course.id).first()
-        # course_util.max_record = course_util.max_record + 1
-        # db.commit()
-        # db.refresh(course_util)
-        # course_input.courseInfo.append({
-        #     'fieldName': 'recordID',
-        #     'fieldValue': course_util.max_record
-        # })
+            value.update({d["fieldName"]: d["fieldValue"]})
 
-        # Convert request body to database processable entities
-        # col_name_literal, col_value_literal =  db_scripts.create_update_info((course_input.courseInfo))
-
-        # Update course table
-        # sql = """
-        # INSERT INTO {table}({cols}) VALUES ({vals})
-        # """.format(table=course.table_name, cols=col_name_literal, vals=col_value_literal)
-        
-    # with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
-    #     cur = conn.cursor()
-    #     cur.executescript(sql)    
+        value = [value]
+        with engine.connect() as conn:
+            result = conn.execute(
+                insert(table_meta),
+                value
+            )
 
 
 def db_delete_course_record(table_name, record_id, db: Session, course): 
