@@ -1,15 +1,18 @@
 from fastapi import APIRouter, Depends, Response, UploadFile, status, HTTPException, File
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect, MetaData, Table
+from sqlalchemy import inspect, MetaData, Table, update
+from courseService.courseDbModel import UserCourse
 from courseService.course_crud import db_get_course_link
 from courseService import course_crud
-from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord
+from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord, SubscriptionSchema
 from dataAdapter.database import get_db
 
 from userService.encrypt import get_user_from_token, oauth2_scheme
+from userService import user_crud
 from courseService.db_scripts import create_table_name
 
 from dataAdapter.database import engine
+from userService.userDbModel import User
 
 # Create a router for handling course information
 def course_router() -> APIRouter:
@@ -154,6 +157,17 @@ def course_router() -> APIRouter:
             }
         }
 
+    @course_router.get("/subscribe")
+    def get_user_subscribed_courses(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+        u_id, u_role = get_user_from_token(token)
+        result = course_crud.db_get_suscribed_courses(u_id, db)
+        return {
+            "statusCode": status.HTTP_200_OK,
+            "title": "Success",
+            "statusText": "OK",
+            "course": result
+        }
+    
     # Add data to course 
     @course_router.put("/courses/{course_id}")
     def add_row_to_course(
@@ -276,6 +290,44 @@ def course_router() -> APIRouter:
             "statusCode": status.HTTP_200_OK,
             "title": "Success",
             "statusText": "ردیف با موفقیت حذف شد",
+        }
+
+    @course_router.post("/courses/subscribe")
+    def subscribe_to_course(courseList: SubscriptionSchema, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+        u_id, u_role = get_user_from_token(token)
+
+        if u_role != "user":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "statusCode": status.HTTP_403_FORBIDDEN,
+                    "title": "Forbidden",
+                    "statusText": "Forbidden",
+                    "errorText": "شما اجازه ثبت نام در دوره ها را ندارید"
+                }
+            )
+        user = user_crud.db_get_user_by_id(u_id, db=db)
+        current_subscription = user.subscriptions
+        if not current_subscription:
+            current_subscription = []
+
+
+        # FIXME: Prevent from repetition
+        for courseID in courseList.courseIDList:
+            current_subscription.append(courseID)
+
+        print(current_subscription)
+
+        db.execute(
+            update(User).
+            where(User.id == u_id).
+            values(subscriptions = current_subscription)
+        )
+        db.commit()
+        return {
+            "statusCode": status.HTTP_200_OK,
+            "title": "Success",
+            "statusText": "ثبت نام با موفقیت انجام شد",
         }
 
     return course_router

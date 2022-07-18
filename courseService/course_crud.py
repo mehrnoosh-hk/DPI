@@ -3,6 +3,7 @@ import sqlite3
 from aifc import Error
 from typing import Optional
 from dataAdapter.database import engine
+from userService.userDbModel import User
 from .courseDbModel import UserCourse, Utility
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate
 from courseService.link import create_link
@@ -186,3 +187,13 @@ def db_add_course_to_utility(id, db: Session):
     db.add(utility_course)
     db.commit()
     db.refresh(utility_course)
+
+def db_get_suscribed_courses(u_id: int, db: Session):
+    user: User = db.query(User).filter(User.id == u_id).first()
+    subs =  user.subscriptions
+    result = []
+    for courseID in subs:
+        course: UserCourse = db_get_course_by_id(courseID, db)
+        temp = {"courseID": course.id ,"courseName": course.course_name}
+        result.append(temp)
+    return result

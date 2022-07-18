@@ -7,8 +7,6 @@ class CourseSchema(BaseModel):
     courseDetails: list[dict]
     
 
-
-
 class CourseSchemaUpdate(BaseModel):
     courseInfo: list[dict]
     recordID: Optional[dict]
@@ -16,3 +14,7 @@ class CourseSchemaUpdate(BaseModel):
 
 class DeleteRecord(BaseModel):
     recordID: dict
+
+
+class SubscriptionSchema(BaseModel):
+    courseIDList: list[int]
