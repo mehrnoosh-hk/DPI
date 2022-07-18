@@ -1,5 +1,5 @@
 from passlib.hash import sha256_crypt
-from jose import jwt
+import jwt
 from config import encryption_config
 
 from fastapi.security import OAuth2PasswordBearer
@@ -14,9 +14,10 @@ def check_password(password: str, hashed_password: str) -> bool:
     return sha256_crypt.verify(password, hashed_password)
 
 
-def create_token(id: int) -> str:
+def create_token(id: int, role: str) -> str:
+    user_dict = {"id": id, "role": role}
     token = jwt.encode(
-        {"id": id},
+        user_dict,
         encryption_config["SECRET_KEY"],
         encryption_config["ALGORITHM"]
     )
@@ -24,12 +25,14 @@ def create_token(id: int) -> str:
 
 
 def decode_token(token: str) -> dict:
-    return jwt.decode(
+    user_dict = jwt.decode(
         token,
         encryption_config["SECRET_KEY"],
         algorithms=[encryption_config["ALGORITHM"]]
     )
+    return user_dict
 
 
-def get_user_id_from_token(token: str) -> int:
-    return decode_token(token)["id"]
+def get_user_from_token(token: str) -> list[int, str]:
+    decoded = decode_token(token)
+    return decoded["id"], decoded["role"]

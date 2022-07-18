@@ -49,18 +49,19 @@ def db_get_users(db: Session) -> list[User]:
 
 
 # Create a new user in database
-def db_create_user(email: str, password: str, db: Session) -> None:
+def db_create_user(email: str, password: str, role: str, db: Session) -> None:
     """This function creates a new user in the database.
 
     Args:
         email (str): The email of the user.
         password (str): The password of the user.
+        role (str): User role
         db (Session): A database session.
 
     Returns:
         int: The id of the new user.
     """
-    user = User(email=email, password=password)
+    user = User(email=email, password=password, role=role)
     db.add(user)
     db.commit()
     db.refresh(user)

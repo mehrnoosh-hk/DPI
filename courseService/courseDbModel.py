@@ -1,6 +1,6 @@
 from dataAdapter.database import Base
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
+from sqlalchemy import ARRAY, Column, Integer, String, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 
 class UserCourse(Base):
@@ -12,6 +12,7 @@ class UserCourse(Base):
     course_details = Column(JSON)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     course_link=Column(String)
+    subscribers = Column(ARRAY(Integer))
 
     user = relationship('User', back_populates='user_courses')
 
