@@ -24,12 +24,16 @@ def create_token(id: int, role: str) -> str:
     return token
 
 
+# FIXME: Pass execption to next level
 def decode_token(token: str) -> dict:
-    user_dict = jwt.decode(
-        token,
-        encryption_config["SECRET_KEY"],
-        algorithms=[encryption_config["ALGORITHM"]]
-    )
+    try:
+        user_dict = jwt.decode(
+            token,
+            encryption_config["SECRET_KEY"],
+            algorithms=[encryption_config["ALGORITHM"]]
+        )
+    except Exception as e:
+        print(e)    
     return user_dict
 
 
