@@ -83,8 +83,8 @@ def course_router() -> APIRouter:
     # Returns all courses for a user
     @course_router.get("/user_courses")
     def get_courses_of_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)):
-        id = get_user_from_token(token)
-        courses = course_crud.db_get_user_courses(id, db)
+        u_id, u_role = get_user_from_token(token)
+        courses = course_crud.db_get_user_courses(u_id, db)
         if not courses:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -107,7 +107,7 @@ def course_router() -> APIRouter:
     # Returns a course details by id
     @course_router.get("/courses/{course_id}")
     def get_course_details(course_id: int, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
-        user_id = get_user_from_token(token)
+        user_id, user_role = get_user_from_token(token)
         course = course_crud.db_get_course_by_id(course_id, db)
 
         if not course:
@@ -158,7 +158,7 @@ def course_router() -> APIRouter:
     ):
 
         # Read user id from token
-        user_id = get_user_from_token(token)
+        user_id, user_role = get_user_from_token(token)
 
         # Check if the course exists
         course = course_crud.db_get_course_by_id(course_id, db)
