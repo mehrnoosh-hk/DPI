@@ -92,7 +92,7 @@ def course_router() -> APIRouter:
 
     # Returns a course details by id
     @course_router.get("/courses/{course_id}")
-    def get_course(course_id: int, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
+    def get_course_details(course_id: int, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
         user_id = get_user_id_from_token(token)
         course = course_crud.db_get_course_by_id(course_id, db)
 

@@ -8,7 +8,7 @@ from .courseDbModel import UserCourse, Utility
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate
 from courseService.link import create_link
 from pydantic import Json
-from sqlalchemy import (MetaData, Table, select, create_engine, table)
+from sqlalchemy import (MetaData, Table, select, create_engine, table, update)
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
 
@@ -122,7 +122,7 @@ def db_get_course_details(id: int, db:Session):
 
     return cleanCourseInfo, cleanCourseField
 
-def db_course_insert(course, course_input: CourseSchemaUpdate, db: Session):
+def db_course_insert(course: UserCourse, course_input: CourseSchemaUpdate, db: Session):
     
     # Updating an existing row
     if course_input.recordID:
@@ -132,7 +132,13 @@ def db_course_insert(course, course_input: CourseSchemaUpdate, db: Session):
         sql = """
         UPDATE {table} SET ({cols}) = ({vals}) WHERE recordID = {id}
         """.format(table=course.table_name, cols=col_name_literal, vals=col_value_literal, id=record_id)
-    
+
+        table_name = course.table_name
+        table_meta = Table(table_name, MetaData(), autoload_with=engine)
+        stmt = update(table_meta).where("recordID" == record_id).values(course_input.courseInfo)
+        print(stmt)
+
+
     # Creating a new row
     else:
         # Update utility table

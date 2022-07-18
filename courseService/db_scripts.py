@@ -70,6 +70,14 @@ def create_update_info(courseInfo: list[dict]):
     col_value_literal = ",".join(f"'{w}'" for w in col_value)
     return col_name_literal, col_value_literal
 
+def create_put_row_info(courseInfo: list):
+    col_name = []
+    col_value = []
+    for d in courseInfo:
+        col_name.append(str(d['fieldName']).replace(" ", "_"))
+        col_value.append(d['fieldValue'])
+    return [{}]
+
 def reindex(table_name, r: int) -> None:
     sql = """
     UPDATE {table} 
