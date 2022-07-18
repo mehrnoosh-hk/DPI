@@ -80,6 +80,12 @@ def course_router() -> APIRouter:
                 }
             )
 
+    @course_router.get("/courses")
+    def get_all_courses(db: Session = Depends(get_db)):
+        courses = course_crud.db_get_all_courses(db=db)
+        result = [{"courseName": c.course_name, "courseId": c.id} for c in courses]
+        return result
+    
     # Returns all courses for a user
     @course_router.get("/user_courses")
     def get_courses_of_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)):
@@ -188,7 +194,12 @@ def course_router() -> APIRouter:
         # Add data to course
         else:
             try:
-                course_crud.db_course_insert(course, course_input, db)
+                course_crud.db_course_insert(
+                    table_name=course.table_name,
+                    info=course_input.courseInfo,
+                    db=db,
+                    recordID=course_input.recordID,
+                )
                 return {
                 "statusCode": status.HTTP_200_OK,
                 "title": "Success",
