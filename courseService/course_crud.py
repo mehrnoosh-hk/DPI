@@ -2,17 +2,15 @@ import itertools
 import sqlite3
 from aifc import Error
 from typing import Optional
-
 from dataAdapter.database import engine
 from .courseDbModel import UserCourse, Utility
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate
 from courseService.link import create_link
 from pydantic import Json
-from sqlalchemy import (MetaData, Table, select, create_engine, table, update)
+from sqlalchemy import (MetaData, String, Table, insert, select, create_engine, table, update, Column)
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
-
-from courseService.db_scripts import clean_up_course_fields, create_course_Info, create_table_dynamically, create_table_name, create_update_info, reindex
+from courseService import db_scripts
 
 
 def db_get_user_courses(user_id, db: Session) -> list[UserCourse]:
@@ -76,9 +74,10 @@ def db_get_course_link(course_link:str, db:Session):
 
 def db_create_course(id:str, course_input: CourseSchema, db:Session) -> None:
     """Dynamically create a table for course defined by user"""
-    TABLE_NAME = create_table_name(id, course_input.courseName)
-    create_table_dynamically(TABLE_NAME, course_input.courseDetails, db)
-
+    # Create a unique name based on user_id
+    TABLE_NAME = db_scripts.create_table_name(id, course_input.courseName)
+    # Generate Columns and columns type based on user input
+    db_scripts.create_table_dynamically(TABLE_NAME, course_input.courseDetails, db)
 
     # Register the created table in user_courses table
     user_course = UserCourse(
@@ -102,7 +101,7 @@ def db_get_course_details(id: int, db:Session):
     # Read table meta data of columns name and type and create courseFiled list
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     courseField = [{"fieldName": c.name, "fieldType": str(c.type)} for c in table_meta.columns]
-    cleanCourseField = clean_up_course_fields(courseField)
+    cleanCourseField = db_scripts.clean_up_course_fields(courseField)
 
     # Read table rows and create courseInfo
     stmt = select(table_meta)
@@ -118,7 +117,7 @@ def db_get_course_details(id: int, db:Session):
                     "fieldValue": row[i]
                 }
                 courseInfo.append(temp)
-        cleanCourseInfo = clean_up_course_fields(courseInfo)
+        cleanCourseInfo = db_scripts.clean_up_course_fields(courseInfo)
 
     return cleanCourseInfo, cleanCourseField
 
@@ -127,41 +126,59 @@ def db_course_insert(course: UserCourse, course_input: CourseSchemaUpdate, db: S
     # Updating an existing row
     if course_input.recordID:
         # Convert request body to database processable entities
-        col_name_literal, col_value_literal =  create_update_info(course_input.courseInfo)
+        for d in course_input.courseInfo:
+            d['fieldName'] = d['fieldName'].replace(" ", "_")
         record_id = course_input.recordID['recordID']
-        sql = """
-        UPDATE {table} SET ({cols}) = ({vals}) WHERE recordID = {id}
-        """.format(table=course.table_name, cols=col_name_literal, vals=col_value_literal, id=record_id)
+        
 
         table_name = course.table_name
         table_meta = Table(table_name, MetaData(), autoload_with=engine)
-        stmt = update(table_meta).where("recordID" == record_id).values(course_input.courseInfo)
-        print(stmt)
+        for d in course_input.courseInfo:
+            value = {d["fieldName"]: d["fieldValue"]}
+            print(value)
+            stmt = (update(table_meta).
+            where("recordID" == record_id).
+            values(value))
+            print(stmt)
+            db.execute(stmt)
+
 
 
     # Creating a new row
     else:
+        for d in course_input.courseInfo:
+            d['fieldName'] = d['fieldName'].replace(" ", "_")
+
+        table_name = course.table_name
+        table_meta = Table(table_name, MetaData(), autoload=True, autoload_with=engine)
+        value = {}
+        for d in course_input.courseInfo:
+            value.update({d["fieldName"] : d["fieldValue"]})
+        print(value)
+        stmt = insert(table_meta).values(value)
+        print(stmt)
+        db.execute(stmt)
         # Update utility table
-        course_util = db.query(Utility).filter(Utility.course_id == course.id).first()
-        course_util.max_record = course_util.max_record + 1
-        db.commit()
-        db.refresh(course_util)
-        course_input.courseInfo.append({
-            'fieldName': 'recordID',
-            'fieldValue': course_util.max_record
-        })
+        # course_util = db.query(Utility).filter(Utility.course_id == course.id).first()
+        # course_util.max_record = course_util.max_record + 1
+        # db.commit()
+        # db.refresh(course_util)
+        # course_input.courseInfo.append({
+        #     'fieldName': 'recordID',
+        #     'fieldValue': course_util.max_record
+        # })
 
         # Convert request body to database processable entities
-        col_name_literal, col_value_literal =  create_update_info((course_input.courseInfo))
+        # col_name_literal, col_value_literal =  db_scripts.create_update_info((course_input.courseInfo))
 
         # Update course table
-        sql = """
-        INSERT INTO {table}({cols}) VALUES ({vals})
-        """.format(table=course.table_name, cols=col_name_literal, vals=col_value_literal)
+        # sql = """
+        # INSERT INTO {table}({cols}) VALUES ({vals})
+        # """.format(table=course.table_name, cols=col_name_literal, vals=col_value_literal)
         
-    with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
-        cur = conn.cursor()
-        cur.executescript(sql)    
+    # with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
+    #     cur = conn.cursor()
+    #     cur.executescript(sql)    
 
 
 def db_delete_course_record(table_name, record_id, db: Session, course): 
@@ -173,7 +190,7 @@ def db_delete_course_record(table_name, record_id, db: Session, course):
         cur.executescript(stmt)
 
     # Update index
-    reindex(table_name, record_id)
+    db_scripts.reindex(table_name, record_id)
 
     # Update utility table
     course_util = db.query(Utility).filter(Utility.course_id == course.id).first()

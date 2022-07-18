@@ -61,11 +61,10 @@ def create_course_Info(rows: list, columnInfos: list):
     return result_dict, field_dict
 
 def create_update_info(courseInfo: list[dict]):
-    col_name = []
-    col_value = []
+    update_info = []
     for d in courseInfo:
-        col_name.append(str(d['fieldName']).replace(" ", "_"))
-        col_value.append(str(d['fieldValue']))
+        d['fieldName'] = d['fieldName'].replace(" ", "_")
+
     col_name_literal = ",".join(col_name)
     col_value_literal = ",".join(f"'{w}'" for w in col_value)
     return col_name_literal, col_value_literal
@@ -90,14 +89,13 @@ def reindex(table_name, r: int) -> None:
 
 
 def create_table_dynamically(tableName: str, info: list[dict], db: Session):
-    # Create a uniqe table name
 
+    # Create a uniqe table name
     TABLE_NAME = tableName.replace(" ", "")
     TABLE_SPEC = []
     type_dict = {'string': String, 'number': Integer, 'file': String}
     for d in info:
-
-        n = (d['fieldName']).replace(" ", "_")
+        n = (d['fieldName']).replace(" ", "_").strip()
         t = d['fieldType']
         if t == 'file':
             n = 'fileType_' + n
@@ -106,7 +104,6 @@ def create_table_dynamically(tableName: str, info: list[dict], db: Session):
     columns.append(Column('id', Integer, primary_key=True))
     columns.append(Column('recordID', Integer))
     table = Table(TABLE_NAME, MetaData(), *columns)
-
     table_creation_sql = CreateTable(table)
     db.execute(table_creation_sql)
 

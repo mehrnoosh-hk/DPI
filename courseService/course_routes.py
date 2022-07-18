@@ -39,7 +39,7 @@ def course_router() -> APIRouter:
                 }
             )
             
-        # Create table
+        # Create dynamic table
         try:
             # Create new course
             course_id = course_crud.db_create_course(
@@ -118,6 +118,7 @@ def course_router() -> APIRouter:
                     "errorText": "شمااجازه مشاهده این دوره راندارید"
                 }
             )
+            
         info , field = course_crud.db_get_course_details(course.id, db)
         return {
             "statusCode": status.HTTP_200_OK,
@@ -170,9 +171,6 @@ def course_router() -> APIRouter:
                 }
             )
 
-        
-
-
         # Add data to course
         else:
             try:
@@ -192,9 +190,6 @@ def course_router() -> APIRouter:
                         "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"
                     }
                 )
-            
-
-    
     
     @course_router.get("/{course_link}")
     def get_course_by_link(course_link:str,db:Session=Depends(get_db)):

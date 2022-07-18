@@ -15,3 +15,22 @@ with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
 
 for row in rows:
     print(list(zip(columnNames, columnsType, row)))
+
+
+# ****************
+# ****************
+TABLE_NAME = tableName.replace(" ", "")
+TABLE_SPEC = []
+type_dict = {'string': String, 'number': Integer, 'file': String}
+for d in info:
+    n = (d['fieldName']).replace(" ", "_").strip()
+    t = d['fieldType']
+    if t == 'file':
+        n = 'fileType_' + n
+    TABLE_SPEC.append((n, type_dict[t]))
+columns = [Column(n, t) for n, t in TABLE_SPEC]
+columns.append(Column('id', Integer, primary_key=True))
+columns.append(Column('recordID', Integer))
+table = Table(TABLE_NAME, MetaData(), *columns)
+table_creation_sql = CreateTable(table)
+db.execute(table_creation_sql)
