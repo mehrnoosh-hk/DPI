@@ -135,11 +135,12 @@ def db_get_course_details(id: int, db: Session):
 def db_course_insert(table_name: str, info: list, db: Session, recordID: int = None):
 
     # Convert request body to database processable entities
-    for d in info:
-            d['fieldName'] = d['fieldName'].replace(" ", "_")
+    # for d in info:
+    #         d['fieldName'] = d['fieldName'].replace(" ", "_")
             # Read the column names of db, filed in column 
 
 
+    # Create sqlalchemy table object
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
     for d in info:
