@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, UploadFile, status, HTTPException, File
+from fastapi import APIRouter, Depends, Form, Response, UploadFile, status, HTTPException, File
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, MetaData, Table, update
 from courseService.courseDbModel import UserCourse
@@ -13,6 +13,8 @@ from courseService.db_scripts import create_table_name
 
 from dataAdapter.database import engine
 from userService.userDbModel import User
+
+import aiofiles
 
 # Create a router for handling course information
 def course_router() -> APIRouter:
@@ -170,9 +172,10 @@ def course_router() -> APIRouter:
     
     # Add data to course 
     @course_router.put("/courses/{course_id}")
-    def add_row_to_course(
+    async def add_row_to_course(
         course_id: int,
-        course_input: CourseSchemaUpdate,
+        attachment = File(default=None),
+        course_input = Form(...),
         db: Session = Depends(get_db),
         token: str = Depends(oauth2_scheme),
     ):
@@ -207,6 +210,11 @@ def course_router() -> APIRouter:
 
         # Add data to course
         else:
+            if attachment:               
+                async with aiofiles.open(attachment.filename, 'wb') as out_file:
+                    content = await attachment.read()  # async read
+                    await out_file.write(content)  # async write
+            course_input = CourseSchemaUpdate.parse_raw(course_input)
             try:
                 course_crud.db_course_insert(
                     table_name=course.table_name,
