@@ -84,7 +84,7 @@ def db_get_course_link(course_link: str, db: Session):
 def db_create_course(id: str, course_input: CourseSchema, db: Session) -> None:
     """Dynamically create a table for course defined by user"""
     # Create a unique name based on user_id
-    TABLE_NAME = db_scripts.create_table_name(id, course_input.courseName)
+    TABLE_NAME = (course_input.courseName).strip().replace(" ", "_")
     # Generate Columns and columns type based on user input
     db_scripts.create_table_dynamically(
         TABLE_NAME, course_input.courseDetails, db)
@@ -104,7 +104,7 @@ def db_create_course(id: str, course_input: CourseSchema, db: Session) -> None:
 
 
 def db_get_course_details(id: int, db: Session):
-    course = db.query(UserCourse).filter(UserCourse.id == id).first()
+    course: UserCourse = db.query(UserCourse).filter(UserCourse.id == id).first()
     table_name = course.table_name
 
     # Read table meta data of columns name and type and create courseFiled list
@@ -128,7 +128,7 @@ def db_get_course_details(id: int, db: Session):
                 }
                 courseInfo.append(temp)
         cleanCourseInfo = db_scripts.clean_up_course_fields(courseInfo)
-
+    print(course.course_details)
     return cleanCourseInfo, cleanCourseField
 
 
@@ -137,6 +137,9 @@ def db_course_insert(table_name: str, info: list, db: Session, recordID: int = N
     # Convert request body to database processable entities
     for d in info:
             d['fieldName'] = d['fieldName'].replace(" ", "_")
+            # Read the column names of db, filed in column 
+
+
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
     for d in info:

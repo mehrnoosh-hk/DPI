@@ -9,7 +9,6 @@ from dataAdapter.database import get_db
 
 from userService.encrypt import get_user_from_token, oauth2_scheme
 from userService import user_crud
-from courseService.db_scripts import create_table_name
 
 from dataAdapter.database import engine
 from userService.userDbModel import User
@@ -30,7 +29,7 @@ def course_router() -> APIRouter:
         ):
         
         u_id, u_role = get_user_from_token(token)
-        table_name = create_table_name(u_id, course_input.courseName)
+        table_name = (course_input.courseName).strip().replace(" ", "_")
 
 
         
@@ -85,6 +84,7 @@ def course_router() -> APIRouter:
                 }
             )
 
+    # Read all courses
     @course_router.get("/courses")
     def get_all_courses(db: Session = Depends(get_db)):
         courses = course_crud.db_get_all_courses(db=db)
@@ -214,6 +214,8 @@ def course_router() -> APIRouter:
                 async with aiofiles.open(attachment.filename, 'wb') as out_file:
                     content = await attachment.read()  # async read
                     await out_file.write(content)  # async write
+
+            
             course_input = CourseSchemaUpdate.parse_raw(course_input)
             try:
                 course_crud.db_course_insert(
