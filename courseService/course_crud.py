@@ -8,7 +8,7 @@ from .courseDbModel import UserCourse, Utility
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate
 from courseService.link import create_link
 from pydantic import Json
-from sqlalchemy import (MetaData, String, Table, insert,
+from sqlalchemy import (MetaData, String, Table, delete, insert,
                         select, create_engine, table, update, Column)
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
@@ -132,48 +132,46 @@ def db_get_course_details(id: int, db: Session):
     return cleanCourseInfo, cleanCourseField
 
 
-def db_course_insert(table_name: str, info: list, db: Session, recordID: int = None):
-
-    # Convert request body to database processable entities
-    # for d in info:
-    #         d['fieldName'] = d['fieldName'].replace(" ", "_")
-            # Read the column names of db, filed in column 
-
-
+def db_course_insert(table_name: str, info: list, db: Session, c_id: int, recordID: dict = None):
     # Create sqlalchemy table object
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
     for d in info:
         value.update({d["fieldName"]: d["fieldValue"]})
-    value = [value]
+    value_list = [value]
     
     # Updating an existing row
     if recordID:   
         with engine.connect() as conn:
             result = conn.execute(
-                update(table_meta).where(table_meta.c.recordID == 5),
-                value
+                update(table_meta).where(table_meta.c.recordID == recordID["recordID"]),
+                value_list
             )
 
     # Creating a new row
     else:
+        # Read max_record from utility table
+        course_util: Utility = db.query(Utility).filter(Utility.course_id == c_id).first()
+        value.update({"recordID": course_util.max_record + 1})
+        value_list = [value]
         with engine.connect() as conn:
             result = conn.execute(
                 insert(table_meta),
-                value
+                value_list
             )
 
 
 def db_delete_course_record(table_name, record_id, db: Session, course):
-
-    # Delete record from course table
-    stmt = f"DELETE FROM {table_name} WHERE recordID={record_id}"
-    with sqlite3.connect("testDB.db", check_same_thread=False) as conn:
-        cur = conn.cursor()
-        cur.executescript(stmt)
+    
+    table_meta = Table(table_name, MetaData(), autoload_with=engine)
+    with engine.connect() as conn:
+            result = conn.execute(
+                delete(table_meta).
+                where(table_meta.c.recordID == record_id)
+            )
 
     # Update index
-    db_scripts.reindex(table_name, record_id)
+    # db_scripts.reindex(table_name, record_id)
 
     # Update utility table
     course_util = db.query(Utility).filter(
@@ -181,6 +179,14 @@ def db_delete_course_record(table_name, record_id, db: Session, course):
     course_util.max_record = course_util.max_record - 1
     db.commit()
     db.refresh(course_util)
+
+
+def db_update_utility_table(c_id: int, db: Session, delta: int):
+    course_util = db.query(Utility).filter(
+        Utility.course_id == c_id).first()
+    course_util.max_record = course_util.max_record + delta
+    db.commit()
+    db.refresh(course_util)    
 
 
 def db_add_course_to_utility(id, db: Session):

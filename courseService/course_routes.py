@@ -181,10 +181,10 @@ def course_router() -> APIRouter:
     ):
 
         # Read user id from token
-        user_id, user_role = get_user_from_token(token)
+        user_id, _ = get_user_from_token(token)
 
         # Check if the course exists
-        course = course_crud.db_get_course_by_id(course_id, db)
+        course: UserCourse = course_crud.db_get_course_by_id(course_id, db)
         if not course:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -215,15 +215,30 @@ def course_router() -> APIRouter:
                     content = await attachment.read()  # async read
                     await out_file.write(content)  # async write
 
-            
-            course_input = CourseSchemaUpdate.parse_raw(course_input)
             try:
+                course_input = CourseSchemaUpdate.parse_raw(course_input)
+            except:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "statusCode": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        "title": "Forbidden",
+                        "statusText": "Forbidden",
+                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"
+                    }
+                )
+            try:
+                # Update course table
                 course_crud.db_course_insert(
                     table_name=course.table_name,
                     info=course_input.courseInfo,
                     db=db,
+                    c_id=course.id,
                     recordID=course_input.recordID,
                 )
+                # Update utility table
+                course_crud.db_update_utility_table(course.id, db, 1)
+                
                 return {
                 "statusCode": status.HTTP_200_OK,
                 "title": "Success",
@@ -270,7 +285,7 @@ def course_router() -> APIRouter:
     # Delete a row from a course
     @course_router.delete("/courses/{course_id}")
     def delete_course(course_id: int, id: DeleteRecord, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
-        user_id = get_user_from_token(token)
+        user_id, _ = get_user_from_token(token)
         course = course_crud.db_get_course_by_id(course_id, db)
         if not course:
             raise HTTPException(
