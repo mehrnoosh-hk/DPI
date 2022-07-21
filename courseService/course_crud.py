@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import json
 import sqlite3
@@ -106,7 +107,8 @@ def db_create_course(id: str, course_input: CourseSchema, db: Session) -> None:
 
 
 def db_get_course_details(id: int, db: Session):
-    course: UserCourse = db.query(UserCourse).filter(UserCourse.id == id).first()
+    course: UserCourse = db.query(UserCourse).filter(
+        UserCourse.id == id).first()
     table_name = course.table_name
 
     # Read table meta data of columns name and type and create courseFiled list
@@ -139,21 +141,25 @@ def db_course_insert(table_name: str, info: list, db: Session, c_id: int, record
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
     for d in info:
+        if d["fieldName"] == "ترتیب نمایش":
+            d["fieldName"] = "Priority"
         value.update({d["fieldName"]: d["fieldValue"]})
     value_list = [value]
-    
+
     # Updating an existing row
-    if recordID:   
+    if recordID:
         with engine.connect() as conn:
             result = conn.execute(
-                update(table_meta).where(table_meta.c.recordID == recordID["recordID"]),
+                update(table_meta).where(
+                    table_meta.c.recordID == recordID["recordID"]),
                 value_list
             )
 
     # Creating a new row
     else:
         # Read max_record from utility table
-        course_util: Utility = db.query(Utility).filter(Utility.course_id == c_id).first()
+        course_util: Utility = db.query(Utility).filter(
+            Utility.course_id == c_id).first()
         value.update({"recordID": course_util.max_record + 1})
         value_list = [value]
         with engine.connect() as conn:
@@ -164,13 +170,13 @@ def db_course_insert(table_name: str, info: list, db: Session, c_id: int, record
 
 
 def db_delete_course_record(table_name, record_id, db: Session, course):
-    
+
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     with engine.connect() as conn:
-            result = conn.execute(
-                delete(table_meta).
-                where(table_meta.c.recordID == record_id)
-            )
+        result = conn.execute(
+            delete(table_meta).
+            where(table_meta.c.recordID == record_id)
+        )
 
     # Update index
     # db_scripts.reindex(table_name, record_id)
@@ -188,7 +194,7 @@ def db_update_utility_table(c_id: int, db: Session, delta: int):
         Utility.course_id == c_id).first()
     course_util.max_record = course_util.max_record + delta
     db.commit()
-    db.refresh(course_util)    
+    db.refresh(course_util)
 
 
 def db_add_course_to_utility(id, db: Session):
@@ -200,24 +206,45 @@ def db_add_course_to_utility(id, db: Session):
     db.commit()
     db.refresh(utility_course)
 
-def db_get_suscribed_courses(u_id: int, db: Session):
+
+def db_get_suscribed_courses(u_id: int, db: Session) -> list:
     user: User = db.query(User).filter(User.id == u_id).first()
-    subs =  user.subscriptions
-    result = []
-    for courseID in subs:
-        course: UserCourse = db_get_course_by_id(courseID, db)
-        temp = {"courseID": course.id ,"courseName": course.course_name}
-        result.append(temp)
-    return result
+    subs = user.subscriptions
+    return subs
+
 
 def db_subscribe_course(u_id: int, courseList: list, db: Session):
+    # Read user data from users table
     user = user_crud.db_get_user_by_id(u_id, db=db)
     current_subscription = user.subscriptions
     if not current_subscription:
         current_subscription = {}
-    subs_dict = json.load(current_subscription)
+    subs_dict = current_subscription
     for item in courseList:
-        if subs_dict.get(item):
+        if subs_dict.get(str(item)):
             continue
-        temp = {item: []}
+        today = datetime.date.today()
+        temp = {item: today.strftime("%d/%m/%Y")}
         subs_dict.update(temp)
+    # Update users table with new data
+    db.execute(
+        update(User).
+        where(User.id == u_id).
+        values(subscriptions=subs_dict)
+    )
+    db.commit()
+
+# Get row of a course with specific priority
+def db_get_courseInfo_by_priority(course_id: int, priority: int, db:Session):
+    course: UserCourse  = db.query(UserCourse).filter(UserCourse.id == course_id).first()
+    if not course:
+        raise Exception("There is no course with this ID")
+
+    # Create sqlalchemy table object
+    table_meta = Table(course.table_name, MetaData(), autoload_with=engine)
+    with engine.connect() as conn:
+        result = conn.execute(
+            select(table_meta).
+            where(table_meta.c.Priority == priority)
+        ).first()
+    return course.course_name, result

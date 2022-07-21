@@ -27,11 +27,13 @@ def reindex(table_name, r: int) -> None:
 
 def create_table_dynamically(tableName: str, info: list[dict], db: Session):
     # Create a uniqe table name
-    TABLE_NAME = tableName.replace(" ", "")
+    TABLE_NAME = tableName
     TABLE_SPEC = []
     type_dict = {'text': String, 'number': Integer, 'file': MyFile}
     for d in info:
         n = (d['fieldName']).strip()
+        if n == "ترتیب نمایش":
+            n = "Priority"
         t = d['fieldType'].strip()
         if t == 'file':
             n = 'fileType_' + n

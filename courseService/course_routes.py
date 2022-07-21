@@ -1,8 +1,9 @@
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Form, Response, UploadFile, status, HTTPException, File
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, MetaData, Table, update
 from courseService.courseDbModel import UserCourse
-from courseService.course_crud import db_get_course_link
+from courseService.course_crud import db_get_course_link, db_get_courseInfo_by_priority
 from courseService import course_crud
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord, SubscriptionSchema
 from dataAdapter.database import get_db
@@ -16,23 +17,23 @@ from userService.userDbModel import User
 import aiofiles
 
 # Create a router for handling course information
+
+
 def course_router() -> APIRouter:
     course_router = APIRouter()
 
     # Create a new course for a user
     @course_router.post("/courses")
     def create_course(
-                    course_input: CourseSchema,
-                    response: Response,
-                    token: str = Depends(oauth2_scheme),
-                    db: Session = Depends(get_db),
-        ):
-        
+        course_input: CourseSchema,
+        response: Response,
+        token: str = Depends(oauth2_scheme),
+        db: Session = Depends(get_db),
+    ):
+
+        # Exteract user information from token
         u_id, u_role = get_user_from_token(token)
-        table_name = (course_input.courseName).strip().replace(" ", "_")
 
-
-        
         # Checks if user is an admin
         print(u_role)
         if u_role == "user":
@@ -45,6 +46,9 @@ def course_router() -> APIRouter:
                 }
             )
 
+        # Create a table name for course to check if this course already exists
+        table_name = (course_input.courseName).strip().replace(" ", "_")
+
         # Cheks if this course already exists
         course = course_crud.db_get_course_by_name(table_name, db)
         if course:
@@ -56,7 +60,7 @@ def course_router() -> APIRouter:
                     "errorText": "دوره دیگری با این نام وجود دارد",
                 }
             )
-            
+
         # Create dynamic table
         try:
             # Create new course
@@ -88,12 +92,15 @@ def course_router() -> APIRouter:
     @course_router.get("/courses")
     def get_all_courses(db: Session = Depends(get_db)):
         courses = course_crud.db_get_all_courses(db=db)
-        result = [{"courseName": c.course_name, "courseId": c.id} for c in courses]
+        result = [{"courseName": c.course_name, "courseId": c.id}
+                  for c in courses]
         return result
-    
+
     # Returns all courses for a user
     @course_router.get("/user_courses")
-    def get_courses_of_user(token: str = Depends(oauth2_scheme), db:Session = Depends(get_db)):
+    def get_courses_of_user(
+            token: str = Depends(oauth2_scheme),
+            db: Session = Depends(get_db)):
         u_id, u_role = get_user_from_token(token)
         courses = course_crud.db_get_user_courses(u_id, db)
         if not courses:
@@ -113,11 +120,69 @@ def course_router() -> APIRouter:
             "statusText": "OK",
             "courses": courses
         }
-        
+
+    @course_router.post("/subscribe")
+    def subscribe_to_course(
+            courseList: SubscriptionSchema,
+            db: Session = Depends(get_db),
+            token: str = Depends(oauth2_scheme)):
+        u_id, u_role = get_user_from_token(token)
+
+        if u_role != "user":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "statusCode": status.HTTP_403_FORBIDDEN,
+                    "title": "Forbidden",
+                    "statusText": "Forbidden",
+                    "errorText": "شما اجازه ثبت نام در دوره ها را ندارید"
+                }
+            )
+
+        course_crud.db_subscribe_course(
+            u_id=u_id, courseList=courseList.courseIDList, db=db)
+        return {
+            "statusCode": status.HTTP_200_OK,
+            "title": "Success",
+            "statusText": "ثبت نام با موفقیت انجام شد",
+        }
+
+    @course_router.get("/subscribe")
+    def get_user_subscribed_courses(
+            token: str = Depends(oauth2_scheme),
+            db: Session = Depends(get_db)):
+        print("Suscribe route")
+        u_id, u_role = get_user_from_token(token)
+        if u_role != "user":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "statusCode": status.HTTP_403_FORBIDDEN,
+                    "title": "Forbidden",
+                    "statusText": "Forbidden",
+                    "errorText": "تنها دانشجو اجازه ثبت نام و مشاهده دوره های ثبت نامی را دارد"})
+
+        subs: dict = course_crud.db_get_suscribed_courses(u_id, db)
+        subs_info = []
+        for k, _ in subs.items():
+            course_id = int(k)
+            course: UserCourse = course_crud.db_get_course_by_id(course_id=course_id, db=db)
+            temp = {"courseName": course.course_name, "courseID": course_id, "courseLink": course.course_link}
+            subs_info.append(temp)
+            
+        return {
+            "statusCode": status.HTTP_200_OK,
+            "title": "Success",
+            "statusText": "OK",
+            "course": subs_info
+        }
 
     # Returns a course details by id
     @course_router.get("/courses/{course_id}")
-    def get_course_details(course_id: int, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
+    def get_course_details(
+            course_id: int,
+            db: Session = Depends(get_db),
+            token: str = Depends(oauth2_scheme)):
         user_id, user_role = get_user_from_token(token)
         course = course_crud.db_get_course_by_id(course_id, db)
 
@@ -132,50 +197,37 @@ def course_router() -> APIRouter:
                 }
             )
 
+        info, field = course_crud.db_get_course_details(course.id, db)
+        if user_role == "admin":
+            if course.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail={
+                        "statusCode": status.HTTP_403_FORBIDDEN,
+                        "title": "Forbidden",
+                        "statusText": "Forbidden",
+                        "errorText": "شمااجازه مشاهده این دوره راندارید"
+                    }
+                )
+            return {
+                "statusCode": status.HTTP_200_OK,
+                "title": "Success",
+                "statusText": "OK",
+                "course": {
+                    "courseName": course.course_name,
+                    "id": course.id,
+                    "created_at": course.created_at,
+                    "course_link": "https://fastapi-dpi.chabk.ir/" +
+                    course.course_link,
+                    "courseField": field,
+                    "courseInfo": info}}
 
-        if course.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "statusCode": status.HTTP_403_FORBIDDEN,
-                    "title": "Forbidden",
-                    "statusText": "Forbidden",
-                    "errorText": "شمااجازه مشاهده این دوره راندارید"
-                }
-            )
-            
-        info , field = course_crud.db_get_course_details(course.id, db)
-        return {
-            "statusCode": status.HTTP_200_OK,
-            "title": "Success",
-            "statusText": "OK",
-            "course": {
-                "courseName": course.course_name,
-                "id": course.id,
-                "created_at": course.created_at,
-                "course_link": "https://fastapi-dpi.chabk.ir/" + course.course_link,
-                "courseField": field,
-                "courseInfo": info
-            }
-        }
-
-    @course_router.get("/subscribe")
-    def get_user_subscribed_courses(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-        u_id, u_role = get_user_from_token(token)
-        result = course_crud.db_get_suscribed_courses(u_id, db)
-        return {
-            "statusCode": status.HTTP_200_OK,
-            "title": "Success",
-            "statusText": "OK",
-            "course": result
-        }
-    
-    # Add data to course 
+    # Add data to course
     @course_router.put("/courses/{course_id}")
     async def add_row_to_course(
         course_id: int,
-        attachment = File(default=None),
-        course_input = Form(...),
+        attachment=File(default=None),
+        course_input=Form(...),
         db: Session = Depends(get_db),
         token: str = Depends(oauth2_scheme),
     ):
@@ -195,7 +247,7 @@ def course_router() -> APIRouter:
                     "errorText": "دوره ای پیدا نشد"
                 }
             )
-        
+
         # Check if user is the owner of the course
         if course.user_id != user_id:
             raise HTTPException(
@@ -210,23 +262,21 @@ def course_router() -> APIRouter:
 
         # Add data to course
         else:
-            if attachment:               
+            if attachment:
                 async with aiofiles.open(attachment.filename, 'wb') as out_file:
                     content = await attachment.read()  # async read
                     await out_file.write(content)  # async write
 
             try:
                 course_input = CourseSchemaUpdate.parse_raw(course_input)
-            except:
+            except BaseException:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail={
                         "statusCode": status.HTTP_422_UNPROCESSABLE_ENTITY,
                         "title": "Forbidden",
                         "statusText": "Forbidden",
-                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"
-                    }
-                )
+                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"})
             try:
                 # Update course table
                 course_crud.db_course_insert(
@@ -238,25 +288,23 @@ def course_router() -> APIRouter:
                 )
                 # Update utility table
                 course_crud.db_update_utility_table(course.id, db, 1)
-                
+
                 return {
-                "statusCode": status.HTTP_200_OK,
-                "title": "Success",
-                "statusText": "دوره با موفقیت به روز رسانی شد",
+                    "statusCode": status.HTTP_200_OK,
+                    "title": "Success",
+                    "statusText": "دوره با موفقیت به روز رسانی شد",
                 }
             except Exception as e:
                 print(e)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail= {
+                    detail={
                         "statusCode": status.HTTP_400_BAD_REQUEST,
                         "title": "Bad Request",
-                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"
-                    }
-                )
-    
+                        "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"})
+
     @course_router.get("/{course_link}")
-    def get_course_by_link(course_link:str,db:Session=Depends(get_db)):
+    def get_course_by_link(course_link: str, db: Session = Depends(get_db)):
         course = db_get_course_link(course_link, db)
         if not course:
             raise HTTPException(
@@ -268,7 +316,7 @@ def course_router() -> APIRouter:
                     "errorText": "دوره ای با ابن مشخصات پیدا نشد"
                 }
             )
-        info , field = course_crud.db_get_course_details(course.id, db)
+        info, field = course_crud.db_get_course_details(course.id, db)
         return {
             "statusCode": status.HTTP_200_OK,
             "title": "Success",
@@ -284,7 +332,11 @@ def course_router() -> APIRouter:
 
     # Delete a row from a course
     @course_router.delete("/courses/{course_id}")
-    def delete_course(course_id: int, id: DeleteRecord, db: Session = Depends(get_db),token: str = Depends(oauth2_scheme)):
+    def delete_course(
+            course_id: int,
+            id: DeleteRecord,
+            db: Session = Depends(get_db),
+            token: str = Depends(oauth2_scheme)):
         user_id, _ = get_user_from_token(token)
         course = course_crud.db_get_course_by_id(course_id, db)
         if not course:
@@ -297,7 +349,7 @@ def course_router() -> APIRouter:
                     "errorText": "دوره ای با این مشخصات وجود ندارد"
                 }
             )
-        
+
         if course.user_id != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -308,51 +360,14 @@ def course_router() -> APIRouter:
                     "errorText": "شما اجازه تغییر این دوره را ندارید"
                 }
             )
-        
+
         table_name = course.table_name
-        course_crud.db_delete_course_record(table_name, id.recordID['recordID'], db, course)
+        course_crud.db_delete_course_record(
+            table_name, id.recordID['recordID'], db, course)
         return {
             "statusCode": status.HTTP_200_OK,
             "title": "Success",
             "statusText": "ردیف با موفقیت حذف شد",
-        }
-
-    @course_router.post("/courses/subscribe")
-    def subscribe_to_course(courseList: SubscriptionSchema, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-        u_id, u_role = get_user_from_token(token)
-
-        if u_role != "user":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "statusCode": status.HTTP_403_FORBIDDEN,
-                    "title": "Forbidden",
-                    "statusText": "Forbidden",
-                    "errorText": "شما اجازه ثبت نام در دوره ها را ندارید"
-                }
-            )
-        user = user_crud.db_get_user_by_id(u_id, db=db)
-        current_subscription = user.subscriptions
-        if not current_subscription:
-            current_subscription = []
-
-
-        # FIXME: Prevent from repetition
-        for courseID in courseList.courseIDList:
-            current_subscription.append(courseID)
-
-        print(current_subscription)
-
-        db.execute(
-            update(User).
-            where(User.id == u_id).
-            values(subscriptions = current_subscription)
-        )
-        db.commit()
-        return {
-            "statusCode": status.HTTP_200_OK,
-            "title": "Success",
-            "statusText": "ثبت نام با موفقیت انجام شد",
         }
 
     return course_router
