@@ -1,4 +1,5 @@
 import itertools
+import json
 import sqlite3
 from aifc import Error
 from typing import Optional
@@ -13,6 +14,7 @@ from sqlalchemy import (MetaData, String, Table, delete, insert,
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
 from courseService import db_scripts
+from userService import user_crud
 
 
 def db_get_user_courses(user_id, db: Session) -> list[UserCourse]:
@@ -207,3 +209,15 @@ def db_get_suscribed_courses(u_id: int, db: Session):
         temp = {"courseID": course.id ,"courseName": course.course_name}
         result.append(temp)
     return result
+
+def db_subscribe_course(u_id: int, courseList: list, db: Session):
+    user = user_crud.db_get_user_by_id(u_id, db=db)
+    current_subscription = user.subscriptions
+    if not current_subscription:
+        current_subscription = {}
+    subs_dict = json.load(current_subscription)
+    for item in courseList:
+        if subs_dict.get(item):
+            continue
+        temp = {item: []}
+        subs_dict.update(temp)
