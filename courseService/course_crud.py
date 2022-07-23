@@ -124,16 +124,53 @@ def db_get_course_details(id: int, db: Session):
     cleanCourseInfo = []
     if len(rows) > 0:
         for row in rows:
+            temp = []
             for i in range(len(table_meta.columns)):
-                temp = {
+                temp.append({
                     "fieldName": table_meta.columns[i].name,
                     "fieldType": str(table_meta.columns[i].type),
                     "fieldValue": row[i]
-                }
-                courseInfo.append(temp)
-        cleanCourseInfo = db_scripts.clean_up_course_fields(courseInfo)
-    print(course.course_details)
+                })
+            courseInfo.append(temp)
+    print(json.dumps(courseInfo, sort_keys=True, indent=4))
+    cleanCourseInfo = db_scripts.clean_up_course_Info(courseInfo)
     return cleanCourseInfo, cleanCourseField
+
+# Read details of a course row to show to user
+def db_get_course_content_user(course_id: int, priority: int, db: Session):
+    course: UserCourse = db_get_course_by_id(course_id, db)
+    table_name = course.table_name
+
+    # Create sqlalchemy table object
+    table_meta = Table(table_name, MetaData(), autoload_with=engine)
+
+    # Exteract the field names and types
+    courseField = [{"fieldName": c.name, "fieldType": str(
+        c.type)} for c in table_meta.columns]
+    cleanCourseField = db_scripts.clean_up_course_fields(courseField)
+
+    # Read table rows  whit specific priority and create courseInfo
+    with engine.connect() as conn:
+        rows = conn.execute(
+            select(table_meta).
+            where (table_meta.c.Priority == priority)
+        ).first()
+    courseInfo = []
+    cleanCourseInfo = []
+    if not rows:
+        rows = []
+
+    if len(rows) > 0:
+        for i in range(len(table_meta.columns)):
+            temp = {
+                "fieldName": table_meta.columns[i].name,
+                "fieldType": str(table_meta.columns[i].type),
+                "fieldValue": rows[i]
+            }
+            courseInfo.append(temp)
+        cleanCourseInfo = db_scripts.clean_up_course_fields(courseInfo)
+    return cleanCourseInfo, cleanCourseField
+    
 
 
 def db_course_insert(table_name: str, info: list, db: Session, c_id: int, recordID: dict = None):
@@ -173,20 +210,27 @@ def db_delete_course_record(table_name, record_id, db: Session, course):
 
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     with engine.connect() as conn:
-        result = conn.execute(
-            delete(table_meta).
+        record = conn.execute(
+            select(table_meta).
             where(table_meta.c.recordID == record_id)
-        )
-
-    # Update index
-    # db_scripts.reindex(table_name, record_id)
-
-    # Update utility table
-    course_util = db.query(Utility).filter(
-        Utility.course_id == course.id).first()
-    course_util.max_record = course_util.max_record - 1
-    db.commit()
-    db.refresh(course_util)
+        ).first()
+    print(record)
+    if record:
+        # Delete record
+        with engine.connect() as conn:
+            result = conn.execute(
+                delete(table_meta).
+                where(table_meta.c.recordID == record_id)
+            )
+        # Update utility table
+        course_util = db.query(Utility).filter(
+            Utility.course_id == course.id).first()
+        if course_util.max_record != -1:
+            course_util.max_record = course_util.max_record - 1
+            # Update index
+            db_scripts.reindex(table_name, record_id, db)
+            db.commit()
+            db.refresh(course_util)
 
 
 def db_update_utility_table(c_id: int, db: Session, delta: int):
@@ -212,7 +256,7 @@ def db_get_suscribed_courses(u_id: int, db: Session) -> list:
     subs = user.subscriptions
     return subs
 
-
+# Add list of course IDs to user subscription list
 def db_subscribe_course(u_id: int, courseList: list, db: Session):
     # Read user data from users table
     user = user_crud.db_get_user_by_id(u_id, db=db)
@@ -222,6 +266,9 @@ def db_subscribe_course(u_id: int, courseList: list, db: Session):
     subs_dict = current_subscription
     for item in courseList:
         if subs_dict.get(str(item)):
+            continue
+        course: UserCourse = db_get_course_by_id(item, db)
+        if not course:
             continue
         today = datetime.date.today()
         temp = {item: today.strftime("%d/%m/%Y")}

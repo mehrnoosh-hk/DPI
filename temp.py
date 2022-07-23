@@ -92,3 +92,11 @@ def create_course_Info(rows: list, columnInfos: list):
     return result_dict, field_dict
 
 
+# registration_date = datetime.strptime(v, "%d/%m/%Y")
+            # # TODO: remove number
+            # priority = datetime.today() - registration_date + 1
+
+            # course_name, result = db_get_courseInfo_by_priority(
+            #     course_id=course_id, priority=priority, db=db)
+            # temp = {"courseName": course_name, "courseID": course_id, "courseInfo": result}
+            # subs_info.append(temp)
