@@ -88,11 +88,10 @@ def course_router() -> APIRouter:
                     "errorText": "خطای سیستمی رخ داده",
                 }
             )
-
-    @course_router.get("/test")
-    def get_file():
-        return FileResponse("golang.png")
-    
+        
+    @course_router.get("/files/{file_name}")
+    def show_file(file_name: str):
+        return FileResponse(file_name)
     
     # Read all courses that student/user can subscribe
     @course_router.get("/courses")
@@ -258,7 +257,7 @@ def course_router() -> APIRouter:
     @course_router.put("/courses/{course_id}")
     async def add_row_to_course(
         course_id: int,
-        attachment=File(default=None),
+        attachment: UploadFile = None,
         courseInput=Form(...),
         db: Session = Depends(get_db),
         token: str = Depends(oauth2_scheme),
@@ -294,10 +293,12 @@ def course_router() -> APIRouter:
 
         # Add data to course
         else:
+            file_address = ""
             if attachment:
                 async with aiofiles.open(attachment.filename, 'wb') as out_file:
                     content = await attachment.read()  # async read
                     await out_file.write(content)  # async write
+                    file_address = attachment.filename
 
             try:
                 courseInput = CourseSchemaUpdate.parse_raw(courseInput)
@@ -317,6 +318,7 @@ def course_router() -> APIRouter:
                     db=db,
                     c_id=course.id,
                     recordID=courseInput.recordID,
+                    file_address=file_address
                 )
                 # Update utility table
                 course_crud.db_update_utility_table(course.id, db, 1)
@@ -419,6 +421,6 @@ def course_router() -> APIRouter:
             "statusText": "ردیف با موفقیت حذف شد",
         }
     
-    
+        
 
     return course_router

@@ -173,15 +173,26 @@ def db_get_course_content_user(course_id: int, priority: int, db: Session):
     
 
 
-def db_course_insert(table_name: str, info: list, db: Session, c_id: int, recordID: dict = None):
+def db_course_insert(table_name: str, info: list, db: Session, c_id: int, recordID: dict = None, file_address: str = None):
     # Create sqlalchemy table object
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
+
+    # Create key: value for instering data in table using sqlalchemy
     for d in info:
         if d["fieldName"] == "ترتیب نمایش":
             d["fieldName"] = "Priority"
         value.update({d["fieldName"]: d["fieldValue"]})
+    
+    if file_address:
+        courseField = [{"fieldName": c.name, "fieldType": str(
+        c.type)} for c in table_meta.columns]
+        for field in courseField:
+            if "fileType_" in field["fieldName"]:
+                value.update({field["fieldName"]: file_address})
     value_list = [value]
+
+    print(value)
 
     # Updating an existing row
     if recordID:
@@ -295,3 +306,11 @@ def db_get_courseInfo_by_priority(course_id: int, priority: int, db:Session):
             where(table_meta.c.Priority == priority)
         ).first()
     return course.course_name, result
+
+
+def db_handle_attachment(attachments: list, db: Session, course: UserCourse, user_id: int):
+    # Exteract course Fields info
+    table_meta = Table(course.table_name, MetaData(), autoload_with=engine)
+    courseField = [{"fieldName": c.name, "fieldType": str(
+        c.type)} for c in table_meta.columns]
+    
