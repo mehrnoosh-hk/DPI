@@ -1,4 +1,4 @@
-from sqlalchemy import INTEGER, VARCHAR, Column, String, Integer, Table, MetaData, update
+from sqlalchemy import INTEGER, VARCHAR, Column, Index, String, Integer, Table, MetaData, update
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.orm import Session
 from dataAdapter.database import MyFile, engine
@@ -38,10 +38,11 @@ def create_table_dynamically(tableName: str, info: list[dict], db: Session):
             n = 'fileType_' + n
         TABLE_SPEC.append((n, type_dict[t]))
     columns = [Column(n, t) for n, t in TABLE_SPEC]
-    columns.append(Column('id', Integer, primary_key=True))
+    columns.append(Column('id', Integer, primary_key=True, index=True))
     columns.append(Column('recordID', Integer))
     columns.append(Column('Priority', Integer))  
     table = Table(TABLE_NAME, MetaData(), *columns)
+    Index("myIndex", table.c.id)
     table_creation_sql = CreateTable(table)
     db.execute(table_creation_sql)
 

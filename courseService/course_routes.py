@@ -1,10 +1,10 @@
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, Form, Response, UploadFile, status, HTTPException, File
+from fastapi import APIRouter, Depends, Form, Header, Request, Response, UploadFile, status, HTTPException, File
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect, MetaData, Table, update
 from courseService.courseDbModel import UserCourse
-from courseService.course_crud import db_get_course_link, db_get_courseInfo_by_priority
+from courseService.course_crud import db_check_user_access_to_file, db_get_course_link, db_get_courseInfo_by_priority
 from courseService import course_crud
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord, SubscriptionSchema
 from dataAdapter.database import get_db
@@ -36,7 +36,6 @@ def course_router() -> APIRouter:
         u_id, u_role = get_user_from_token(token)
 
         # Checks if user is an admin
-        print(u_role)
         if u_role == "user":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -89,10 +88,21 @@ def course_router() -> APIRouter:
                 }
             )
         
-    @course_router.get("/files/{file_name}")
-    def show_file(file_name: str):
-        return FileResponse(file_name)
-    
+    @course_router.get("/files/{course_id}/{file_name}")
+    def show_file(course_id: int, file_name: str, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+        u_id, _ = get_user_from_token(token)
+        have_access = db_check_user_access_to_file(u_id, course_id, db)
+        if have_access:
+            return FileResponse(file_name, media_type='application/octet-stream', headers={"Content-Disposition": "attachment"})
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "statusCode": status.HTTP_403_FORBIDDEN,
+                "title": "Forbidden",
+                "statusText": "Forbidden",
+                "errorText": "شما اجازه مشاهده این فایل را ندارید"
+            }
+        )
     # Read all courses that student/user can subscribe
     @course_router.get("/courses")
     def get_all_courses(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -232,7 +242,7 @@ def course_router() -> APIRouter:
                     "courseName": course.course_name,
                     "id": course.id,
                     "created_at": course.created_at,
-                    "course_link": "https://fastapi-dpi.chabk.ir/" + course.course_link,
+                    "course_link": course.course_link,
                     "courseField": field,
                     "courseInfo": info}}
         result_Info, result_Fields = course_crud.db_get_course_content_user(
@@ -337,7 +347,7 @@ def course_router() -> APIRouter:
                         "title": "Bad Request",
                         "errorText": "اطلاعات ارسالی با ساختار دوره همخوانی ندارد"})
 
-    @course_router.get("/{course_link}")
+    @course_router.get("/course/{course_link}")
     def get_course_by_link(course_link: str, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
         course = db_get_course_link(course_link, db)
         if not course:

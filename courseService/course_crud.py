@@ -1,4 +1,5 @@
 import datetime
+from http.client import HTTPException
 import itertools
 import json
 import sqlite3
@@ -10,8 +11,8 @@ from .courseDbModel import UserCourse, Utility
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate
 from courseService.link import create_link
 from pydantic import Json
-from sqlalchemy import (MetaData, String, Table, delete, insert,
-                        select, create_engine, table, update, Column)
+from sqlalchemy import (MetaData, String, Table, delete, func, insert,
+                        select, create_engine, table, true, update, Column)
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable, DropTable
 from courseService import db_scripts
@@ -98,7 +99,7 @@ def db_create_course(id: str, course_input: CourseSchema, db: Session) -> None:
         course_name=course_input.courseName,
         table_name=TABLE_NAME,
         course_details=course_input.courseDetails,
-        course_link=create_link()
+        course_link="https://fastapi-dpi.chabk.ir/course/" + create_link()
     )
     db.add(user_course)
     db.commit()
@@ -192,14 +193,24 @@ def db_course_insert(table_name: str, info: list, db: Session, c_id: int, record
                 value.update({field["fieldName"]: file_address})
     value_list = [value]
 
-    print(value)
-
     # Updating an existing row
     if recordID:
+        record_id = recordID["recordID"]
+        query = db.query(
+        table_meta, 
+        func.rank()\
+            .over(
+                order_by=table_meta.c.id
+            )\
+            .label('rank')
+        )
+        id_to_update = query[record_id].id
+
+        # Delete record
         with engine.connect() as conn:
             result = conn.execute(
-                update(table_meta).where(
-                    table_meta.c.recordID == recordID["recordID"]),
+                update(table_meta).
+                where(table_meta.c.id == id_to_update),
                 value_list
             )
 
@@ -220,28 +231,31 @@ def db_course_insert(table_name: str, info: list, db: Session, c_id: int, record
 def db_delete_course_record(table_name, record_id, db: Session, course):
 
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
+    query = db.query(
+    table_meta, 
+    func.rank()\
+        .over(
+            order_by=table_meta.c.id
+        )\
+        .label('rank')
+    )
+    id_to_delete = query[record_id].id
+
+    # Delete record
     with engine.connect() as conn:
-        record = conn.execute(
-            select(table_meta).
-            where(table_meta.c.recordID == record_id)
-        ).first()
-    print(record)
-    if record:
-        # Delete record
-        with engine.connect() as conn:
-            result = conn.execute(
-                delete(table_meta).
-                where(table_meta.c.recordID == record_id)
-            )
-        # Update utility table
-        course_util = db.query(Utility).filter(
-            Utility.course_id == course.id).first()
-        if course_util.max_record != -1:
-            course_util.max_record = course_util.max_record - 1
-            # Update index
-            db_scripts.reindex(table_name, record_id, db)
-            db.commit()
-            db.refresh(course_util)
+        result = conn.execute(
+            delete(table_meta).
+            where(table_meta.c.id == id_to_delete)
+        )
+    # Update utility table
+    course_util = db.query(Utility).filter(
+        Utility.course_id == course.id).first()
+    if course_util.max_record != -1:
+        course_util.max_record = course_util.max_record - 1
+        # Update index
+        db_scripts.reindex(table_name, record_id, db)
+        db.commit()
+        db.refresh(course_util)
 
 
 def db_update_utility_table(c_id: int, db: Session, delta: int):
@@ -314,3 +328,12 @@ def db_handle_attachment(attachments: list, db: Session, course: UserCourse, use
     courseField = [{"fieldName": c.name, "fieldType": str(
         c.type)} for c in table_meta.columns]
     
+def db_check_user_access_to_file(user_id: int, course_id: int, db: Session) -> bool:
+    user: User = user_crud.db_get_user_by_id(user_id, db)
+    course: UserCourse = db_get_course_by_id(course_id, db)
+    subs = user.subscriptions
+    if str(course_id) in subs:
+        return True
+    elif course.user_id == user_id:
+        return True
+    return False
