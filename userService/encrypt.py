@@ -33,7 +33,9 @@ def decode_token(token: str) -> dict:
             algorithms=[encryption_config["ALGORITHM"]]
         )
     except Exception as e:
-        print(e)    
+        print(e)
+    if not user_dict:
+        raise Exception("Wrong Token")
     return user_dict
 
 
