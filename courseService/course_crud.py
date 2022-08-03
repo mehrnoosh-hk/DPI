@@ -151,8 +151,8 @@ def db_get_course_content_user(course_id: int, priority: int, db: Session):
     with engine.connect() as conn:
         rows = conn.execute(
             select(table_meta).
-            where(table_meta.c.Priority == priority)
-        ).first()
+            where(table_meta.c.Priority <= priority).where(table_meta.c.Priority != 0)
+        ).all()
     course_info = []
     clean_course_info = []
 
@@ -160,14 +160,15 @@ def db_get_course_content_user(course_id: int, priority: int, db: Session):
         rows = []
 
     if len(rows) > 0:
-        temp = []
-        for i in range(len(table_meta.columns)):
-            temp.append({
-                "fieldName": table_meta.columns[i].name,
-                "fieldType": str(table_meta.columns[i].type),
-                "fieldValue": rows[i]
-            })
-        course_info.append(temp)
+        for row in rows:
+            temp = []
+            for i in range(len(table_meta.columns)):
+                temp.append({
+                    "fieldName": table_meta.columns[i].name,
+                    "fieldType": str(table_meta.columns[i].type),
+                    "fieldValue": row[i]
+                })
+            course_info.append(temp)
         clean_course_info = db_scripts.clean_up_course_info(course_info)
     return clean_course_info, clean_course_field
 
@@ -178,18 +179,20 @@ def db_course_insert(table_name: str, info: list, db: Session, c_id: int, record
     table_meta = Table(table_name, MetaData(), autoload_with=engine)
     value = {}
 
+    # Reading field names and type from table object
+    course_fields = [{"fieldName": c.name, "fieldType": str(
+        c.type)} for c in table_meta.columns]
+
     # Create {key: value} for inserting data in table using sqlalchemy
     for d in info:
         if d["fieldName"] == "ترتیب نمایش":
             d["fieldName"] = "Priority"
+        for f in course_fields:
+            if f["fieldName"] == "fileType_" + d["fieldName"]:
+                d["fieldName"] = "fileType_" + d["fieldName"]
+
         value.update({d["fieldName"]: d["fieldValue"]})
 
-    if file_address:
-        course_fields = [{"fieldName": c.name, "fieldType": str(
-            c.type)} for c in table_meta.columns]
-        for field in course_fields:
-            if "fileType_" in field["fieldName"]:
-                value.update({field["fieldName"]: file_address})
     value_list = [value]
 
     # Updating an existing row

@@ -49,7 +49,7 @@ def auth_router() -> APIRouter:
                 "errorMessage": "با این مشخصات حساب کاربری دیگری ایجاد شده است"
             }
         hashed_pass = encrypt_password(user_input.password)
-        user_id = user_crud.db_create_user(user_input.email, hashed_pass, "admin", db)
+        user_crud.db_create_user(user_input.email, hashed_pass, "admin", db)
         return {
             "statusCode": status.HTTP_201_CREATED,
             "title": "Successful",

@@ -10,7 +10,7 @@ from courseService import course_crud
 from courseService.course_schema import CourseSchema, CourseSchemaUpdate, DeleteRecord, SubscriptionSchema
 from dataAdapter.database import get_db
 from courseService import exception_handling
-
+from typing import Dict
 from userService.encrypt import get_user_from_token, oauth2_scheme
 from userService import user_crud
 
@@ -50,6 +50,7 @@ def course_router() -> APIRouter:
 
         # Create dynamic table
         try:
+
             # Create new course
             course_crud.db_create_course(u_id, course_input, db)
 
@@ -117,6 +118,8 @@ def course_router() -> APIRouter:
             token: str = Depends(oauth2_scheme),
             db: Session = Depends(get_db)):
         u_id, u_role = get_user_from_token(token)
+        if u_role != "admin":
+            exception_handling.forbidden_handler("شما دسترسی مشاهده این صفحه را ندارید")
         courses: list[UserCourse] = course_crud.db_get_user_courses(u_id, db)
         if not courses:
             exception_handling.not_found_handler("دوره ای یافت نشد")
@@ -143,9 +146,22 @@ def course_router() -> APIRouter:
 
         course_crud.db_subscribe_course(
             u_id=u_id, courseList=courseList.courseIDList, db=db)
+        # Read user by id
+        user: User = user_crud.db_get_user_by_id(u_id, db)
+        subs = user.subscriptions
+        if not subs:
+            subs = {}
+        courses = course_crud.db_get_all_courses(db=db)
+        result = []
+        for c in courses:
+            if str(c.id) in subs:
+                continue
+            temp = {"courseName": c.course_name, "courseId": c.id}
+            result.append(temp)
         return {
             "statusCode": status.HTTP_200_OK,
             "title": "Success",
+            "newList": result,
             "statusText": "ثبت نام با موفقیت انجام شد",
         }
 
@@ -207,9 +223,19 @@ def course_router() -> APIRouter:
                     "courseInfo": info}}
 
         # The case that role is user return row with specific priority
+        user: User = user_crud.db_get_user_by_id(user_id, db)
+
+        # Read the subscription date of this course
+
+        sub_date_str = user.subscriptions[str(course_id)]
+
+        sub_date = datetime.strptime(sub_date_str, "%d/%m/%Y")
+        delta = datetime.today() - sub_date
+        priority = delta.days + 1
+        # Calculate Priority
         result_info, result_fields = course_crud.db_get_course_content_user(
             course_id=course.id,
-            priority=2,
+            priority=priority,
             db=db
         )
         return {
@@ -229,8 +255,7 @@ def course_router() -> APIRouter:
     @course_router.put("/courses/{course_id}")
     async def add_row_to_course(
             course_id: int,
-            attachment: UploadFile = None,
-            courseInput=Form(...),
+            request: Request,
             db: Session = Depends(get_db),
             token: str = Depends(oauth2_scheme),
     ):
@@ -251,27 +276,39 @@ def course_router() -> APIRouter:
         if course.user_id != user_id:
             exception_handling.forbidden_handler("شما اجازه تغییر این دوره را ندارید")
 
-        # Add data to course
-        file_address = ""
-        if attachment:
-            async with aiofiles.open(attachment.filename, 'wb') as out_file:
-                content = await attachment.read()  # async read
-                await out_file.write(content)  # async write
-                file_address = attachment.filename
+        # Read request data
+        form_data = await request.form()
 
-        try:
-            courseInput = CourseSchemaUpdate.parse_raw(courseInput)
-        except BaseException:
-            exception_handling.unprocessable_entity_handler("اطلاعات ارسالی با ساختار دوره همخوانی ندارد")
+        # Create courseInput from form_data
+        course_input = form_data.get("courseInput")
+        course_input = CourseSchemaUpdate.parse_raw(course_input)
+        course_info = course_input.courseInfo
+
+        for k, v in form_data.items():
+            print("key: ", k)
+            print("value: ", form_data.getlist(k))
+
+        for f_key, f_value in form_data.items():
+            if f_key == "courseInput":
+                continue
+            field_name = f_key
+            field_value_list = form_data.getlist(f_key)
+            field_value = []
+            for f in field_value_list:
+                async with aiofiles.open(f.filename, 'wb') as out_file:
+                    content = await f.read()  # async read
+                    await out_file.write(content)  # async write
+                    field_value.append(f.filename)
+            course_info.append({"fieldName": field_name, "fieldValue": field_value})
+
         try:
             # Update course table
             course_crud.db_course_insert(
                 table_name=course.table_name,
-                info=courseInput.courseInfo,
+                info=course_info,
                 db=db,
                 c_id=course.id,
-                recordID=courseInput.recordID,
-                file_address=file_address
+                recordID=course_input.recordID
             )
 
             return {

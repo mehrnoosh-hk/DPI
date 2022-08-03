@@ -1,4 +1,6 @@
-from sqlalchemy import INTEGER, VARCHAR, Column, Index, String, Integer, Table, MetaData, update
+import json
+
+from sqlalchemy import INTEGER, VARCHAR, Column, Index, String, Integer, Table, MetaData, update, ARRAY
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.orm import Session
 from dataAdapter.database import MyFile, engine
@@ -27,7 +29,7 @@ def reindex(table_name, r: int, db: Session) -> None:
 def create_table_dynamically(table_name: str, info: list[dict], db: Session):
     # Create a unique table name
     table_spec = []
-    type_dict = {'text': String, 'number': Integer, 'file': MyFile, 'string': String}
+    type_dict = {'text': String, 'number': Integer, 'file': ARRAY(String), 'string': String}
     for d in info:
         n = (d['fieldName']).strip()
         if n == "ترتیب نمایش":
@@ -72,7 +74,8 @@ def clean_up_course_info(course_info: list) -> list:
                 continue
             if "fileType_" in d["fieldName"]:
                 d["fieldName"] = d["fieldName"].replace("fileType_", "")
-                d["fieldType"] = "file"  
+                d["fieldType"] = "file"
+
             if d["fieldName"] == "Priority":
                 d["fieldName"] = "ترتیب نمایش"           
             d["fieldType"] = type_dict[d["fieldType"]]

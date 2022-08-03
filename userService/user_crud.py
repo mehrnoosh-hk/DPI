@@ -45,6 +45,7 @@ def db_get_users(db: Session) -> list[User]:
         list[User]: The list of all users.
     """
     users = db.query(User).all()
+
     return users
 
 
