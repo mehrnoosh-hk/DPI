@@ -34,3 +34,69 @@ columns.append(Column('recordID', Integer))
 table = Table(TABLE_NAME, MetaData(), *columns)
 table_creation_sql = CreateTable(table)
 db.execute(table_creation_sql)
+
+
+def create_course_Info(rows: list, columnInfos: list):
+    columnNames = [(item[1]).replace("_", " ") for item in columnInfos]
+    columnsType = [item[2] for item in columnInfos]
+    if len(rows) == 0:
+        result_dict = []
+        field_dict = []
+        for i in range(len(columnNames)):
+            if columnNames[i] == 'id' or columnNames[i] == 'recordID':
+                continue
+            mid = {'fieldName': columnNames[i], 'fieldType': columnsType[i]}
+            if mid['fieldType'] == 'VARCHAR':
+                mid['fieldType'] = 'text'
+            if mid['fieldType'] == 'INTEGER':
+                mid['fieldType'] = 'number'
+            if 'fileType' in mid['fieldName']:
+                print("Fuck")
+                mid['fieldType'] = 'file'
+                mid['fieldName'] = (mid['fieldName']).replace('fileType ', '')
+            field_dict.append(mid)
+    else:
+        result_dict = []
+        field_dict = []
+        rows = [*rows]
+        for row in rows:
+            temp = []
+            for i in range(len(row)):
+                if columnNames[i] == 'id' or columnNames[i] == 'recordID':
+                    continue
+                mid = {
+                    'fieldName': columnNames[i], 'fieldType': columnsType[i], 'fieldValue': row[i]}
+                if mid['fieldType'] == 'VARCHAR':
+                    mid['fieldType'] = 'text'
+                if mid['fieldType'] == 'INTEGER':
+                    mid['fieldType'] = 'number'
+                if 'فایل' in mid['fieldName'] or 'file' in mid['fieldName']:
+                    mid['fieldType'] = 'file'
+                    mid['fieldName'] = (
+                        mid['fieldName']).replace('fileType ', '')
+                temp.append(mid)
+            result_dict.append(temp)
+
+        for i in range(len(columnNames)):
+            if columnNames[i] == 'id' or columnNames[i] == 'recordID':
+                continue
+            mid = {'fieldName': columnNames[i], 'fieldType': columnsType[i]}
+            if mid['fieldType'] == 'VARCHAR':
+                mid['fieldType'] = 'text'
+            if mid['fieldType'] == 'INTEGER':
+                mid['fieldType'] = 'number'
+            if 'fileType' in mid['fieldName']:
+                mid['fieldType'] = 'file'
+                mid['fieldName'] = (mid['fieldName']).replace('fileType ', '')
+            field_dict.append(mid)
+    return result_dict, field_dict
+
+
+# registration_date = datetime.strptime(v, "%d/%m/%Y")
+            # # TODO: remove number
+            # priority = datetime.today() - registration_date + 1
+
+            # course_name, result = db_get_courseInfo_by_priority(
+            #     course_id=course_id, priority=priority, db=db)
+            # temp = {"courseName": course_name, "courseID": course_id, "courseInfo": result}
+            # subs_info.append(temp)
